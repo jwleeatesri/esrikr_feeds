@@ -12,12 +12,12 @@ from arcgis_utils import connect_to_agol, get_flc_by_id, get_layer_data
 
 load_dotenv()
 
-TIDAL_CURRENT_FEATURE_ID = "24f75791829440ffb46b4d15360aec7d"
+SALINITY_FEATURE_ID = "58a4877e2ff04611ac1df999524ec1ac"
 
 def call_khoa_api(obs_code: str, datestring: str) -> dict:
     try:
         response = requests.get(
-            url="http://www.khoa.go.kr/api/oceangrid/fcTidalCurrent/search.do",
+            url="http://www.khoa.go.kr/api/oceangrid/tideObsSalt/search.do",
             params={
                 "ServiceKey": os.getenv("KHOA_APIKEY"),
                 "ObsCode": obs_code,
@@ -29,31 +29,30 @@ def call_khoa_api(obs_code: str, datestring: str) -> dict:
     except KeyError as e:
         print(e)
 
-def parse_current_speed(current_speed: str) -> int:
+def parse(value: str) -> float:
     try:
-        return float(current_speed)
+        return float(value)
     except ValueError:
-        print(f"{current_speed} is not a number")
+        print(f"{value} is not a number")
         return 0
 
 def build_update_data(gis: GIS) -> list[dict]:
-    layer_data = get_layer_data(gis, TIDAL_CURRENT_FEATURE_ID)
+    layer_data = get_layer_data(gis, SALINITY_FEATURE_ID)
     today = f"{datetime.now():%Y%m%d}"
     for feature in tqdm(layer_data):
         obs_code = feature.attributes["station_no"]
         resp_json = call_khoa_api(obs_code=obs_code, datestring=today)
         try:
             latest_record = resp_json["result"]["data"][-1]
-            feature.attributes["pred_time"] = latest_record["pred_time"]
-            feature.attributes["current_dir"] = latest_record["current_dir"]
-            feature.attributes["current_speed"] = parse_current_speed(latest_record["current_speed"])
+            feature.attributes["record_time"] = latest_record["record_time"]
+            feature.attributes["salinity"] = parse(latest_record["salinity"])
         except KeyError as e:
             print(e)
             continue
     return layer_data
 
 def update(gis: GIS, layer_data: list[dict]) -> None:
-    layer = get_flc_by_id(gis, TIDAL_CURRENT_FEATURE_ID).layers[0]
+    layer = get_flc_by_id(gis, SALINITY_FEATURE_ID).layers[0]
     result = layer.edit_features(updates=layer_data)
     return result
 
