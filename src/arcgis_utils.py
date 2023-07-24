@@ -35,5 +35,3 @@ def get_layer_data(gis: GIS, feature_id: str) -> list:
     layer_data = layer.query().features
     
     return layer_data
-
-

@@ -12,12 +12,12 @@ from arcgis_utils import connect_to_agol, get_flc_by_id, get_layer_data
 
 load_dotenv()
 
-TIDE_FEATURE_ID = "658d49b2b1504c54a9148bfdbef4a888"
+SEAFOG_FEATURE_ID = "e6e10d2d56004bd2ac0914842d19769f"
 
-def call_khoa_api(obs_code: str, datestring: str, datatype: str) -> dict:
+def call_khoa_api(obs_code: str, datestring: str) -> dict:
     try:
         response = requests.get(
-            url=f"http://www.khoa.go.kr/api/oceangrid/{datatype}/search.do",
+            url="http://www.khoa.go.kr/api/oceangrid/seafog/search.do",
             params={
                 "ServiceKey": os.getenv("KHOA_APIKEY"),
                 "ObsCode": obs_code,
@@ -29,30 +29,30 @@ def call_khoa_api(obs_code: str, datestring: str, datatype: str) -> dict:
     except KeyError as e:
         print(e)
 
-def parse(value: str) -> float:
+def parse(value: str) -> int:
     try:
-        return float(value)
+        return int(float(value))
     except ValueError:
         print(f"{value} is not a number")
         return 0
 
 def build_update_data(gis: GIS) -> list[dict]:
-    layer_data = get_layer_data(gis, TIDE_FEATURE_ID)
-    today = f"{datetime.now():%Y%m%d}"
+    layer_data = get_layer_data(gis, SEAFOG_FEATURE_ID)
+    today = f"{datetime.now():%Y%m%d%H}"
     for feature in tqdm(layer_data):
         obs_code = feature.attributes["station_no"]
-        resp_json = call_khoa_api(obs_code=obs_code, datestring=today, datatype="obsWaveHight")
+        resp_json = call_khoa_api(obs_code=obs_code, datestring=today)
         try:
             latest_record = resp_json["result"]["data"][-1]
-            feature.attributes["date_time"] = latest_record["record_time"]
-            feature.attributes["wave_height"] = parse(latest_record["wave_height"])
+            feature.attributes["pre_time"] = latest_record["pre_time"]
+            feature.attributes["seafog_master"] = parse(latest_record["seafog_master"])
         except KeyError as e:
-            print(e)
+            print(resp_json)
             continue
     return layer_data
 
 def update(gis: GIS, layer_data: list[dict]) -> None:
-    layer = get_flc_by_id(gis, TIDE_FEATURE_ID).layers[0]
+    layer = get_flc_by_id(gis, SEAFOG_FEATURE_ID).layers[0]
     result = layer.edit_features(updates=layer_data)
     return result
 

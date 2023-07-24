@@ -12,7 +12,7 @@ from arcgis_utils import connect_to_agol, get_flc_by_id, get_layer_data
 
 load_dotenv()
 
-TIDE_FEATURE_ID = "658d49b2b1504c54a9148bfdbef4a888"
+OCEAN_AIR_TEMP_FEATURE_ID = "bb6596821de345e789aa46dcdf5210e3"
 
 def call_khoa_api(obs_code: str, datestring: str, datatype: str) -> dict:
     try:
@@ -28,6 +28,9 @@ def call_khoa_api(obs_code: str, datestring: str, datatype: str) -> dict:
         return response.json()
     except KeyError as e:
         print(e)
+    except requests.exceptions.JSONDecodeError as e:
+        print(response)
+        print(e)
 
 def parse(value: str) -> float:
     try:
@@ -37,22 +40,23 @@ def parse(value: str) -> float:
         return 0
 
 def build_update_data(gis: GIS) -> list[dict]:
-    layer_data = get_layer_data(gis, TIDE_FEATURE_ID)
+    layer_data = get_layer_data(gis, OCEAN_AIR_TEMP_FEATURE_ID)
     today = f"{datetime.now():%Y%m%d}"
     for feature in tqdm(layer_data):
         obs_code = feature.attributes["station_no"]
-        resp_json = call_khoa_api(obs_code=obs_code, datestring=today, datatype="obsWaveHight")
+        # obs_type = "tidalBuTemp" if feature.attributes["obs_type"] == "해양관측부이" else "tideObsTemp"
+        resp_json = call_khoa_api(obs_code=obs_code, datestring=today, datatype="tideObsAirTemp")
         try:
             latest_record = resp_json["result"]["data"][-1]
-            feature.attributes["date_time"] = latest_record["record_time"]
-            feature.attributes["wave_height"] = parse(latest_record["wave_height"])
+            feature.attributes["record_time"] = latest_record["record_time"]
+            feature.attributes["air_temp"] = parse(latest_record["air_temp"])
         except KeyError as e:
             print(e)
             continue
     return layer_data
 
 def update(gis: GIS, layer_data: list[dict]) -> None:
-    layer = get_flc_by_id(gis, TIDE_FEATURE_ID).layers[0]
+    layer = get_flc_by_id(gis, OCEAN_AIR_TEMP_FEATURE_ID).layers[0]
     result = layer.edit_features(updates=layer_data)
     return result
 
